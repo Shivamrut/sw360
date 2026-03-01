@@ -10,11 +10,13 @@
 package org.eclipse.sw360.services.health;
 
 import lombok.Data;
+import lombok.experimental.Accessors;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @Data
+@Accessors(chain = true)
 public class Health {
 
     private Status status;
