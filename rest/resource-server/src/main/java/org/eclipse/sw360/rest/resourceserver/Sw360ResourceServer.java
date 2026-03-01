@@ -50,7 +50,10 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 
 import java.util.*;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {
+        "org.eclipse.sw360.rest.resourceserver",
+        "org.eclipse.sw360.health"
+})
 @Import({Sw360CORSFilter.class, Sw360XssFilter.class})
 public class Sw360ResourceServer extends SpringBootServletInitializer {
 

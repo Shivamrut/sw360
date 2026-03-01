@@ -20,7 +20,6 @@ import org.springframework.stereotype.Service;
 import java.net.MalformedURLException;
 import java.util.Set;
 
-@Lazy
 @Service
 public class HealthHandler implements HealthService{
 
