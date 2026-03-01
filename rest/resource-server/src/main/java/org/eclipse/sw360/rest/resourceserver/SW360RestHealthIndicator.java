@@ -10,18 +10,17 @@
 
 package org.eclipse.sw360.rest.resourceserver;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import org.eclipse.sw360.datahandler.cloudantclient.DatabaseInstanceCloudant;
+import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.services.health.HealthService;
 import org.eclipse.sw360.services.health.Status;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @Component
 public class SW360RestHealthIndicator implements HealthIndicator {
+
     private final HealthService healthService;
 
     public SW360RestHealthIndicator(HealthService healthService) {
@@ -30,52 +29,38 @@ public class SW360RestHealthIndicator implements HealthIndicator {
 
     @Override
     public Health health() {
-        List<Exception> exceptions = new ArrayList<>();
-        RestState restState = check(exceptions);
-        final String rest_state_detail = "Rest State";
-        if (!restState.isUp()) {
-            Health.Builder builderWithDetails = Health.down()
-                    .withDetail(rest_state_detail, restState);
-            for (Exception exception : exceptions) {
-                builderWithDetails = builderWithDetails.withException(exception);
-            }
-            return builderWithDetails
+        boolean isDbReachable = isDbReachable();
+
+        org.eclipse.sw360.services.health.Health serviceHealth;
+        try {
+            serviceHealth = healthService.getHealth();
+        } catch (Exception e) {
+            return Health.down()
+                    .withDetail("isDbReachable", isDbReachable)
+                    .withDetail("serviceStatus", "UNREACHABLE")
+                    .withException(e)
                     .build();
         }
-        return Health.up()
-                .withDetail(rest_state_detail, restState)
-                .build();
+
+        Health.Builder builder = (isDbReachable && serviceHealth.getStatus() == Status.UP)
+                ? Health.up()
+                : Health.down();
+
+        builder.withDetail("isDbReachable", isDbReachable);
+        builder.withDetail("serviceStatus", serviceHealth.getStatus());
+
+        serviceHealth.getDetails().forEach((db, message) ->
+                builder.withDetail("db." + db, message));
+
+        return builder.build();
     }
 
-    private RestState check(List<Exception> exception) {
-        RestState restState = new RestState();
-        restState.isServiceReachable = isServiceReachable(exception);
-        return restState;
-    }
-
-    private boolean isServiceReachable(List<Exception> exception) {
+    private boolean isDbReachable() {
         try {
-            final org.eclipse.sw360.services.health.Health serviceHealth = healthService.getHealth();
-            if (serviceHealth.getStatus().equals(Status.UP)) {
-                return true;
-            } else {
-                exception.add(
-                        new Exception(serviceHealth.getStatus().toString(),
-                                new Throwable(serviceHealth.getDetails().toString())));
-                return false;
-            }
+            DatabaseInstanceCloudant db = new DatabaseInstanceCloudant(DatabaseSettings.getConfiguredClient());
+            return db.checkIfDbExists(DatabaseSettings.COUCH_DB_ATTACHMENTS);
         } catch (Exception e) {
-            exception.add(e);
             return false;
-        }
-    }
-
-    public static class RestState {
-        @JsonInclude
-        public boolean isServiceReachable;
-
-        boolean isUp() {
-            return isServiceReachable;
         }
     }
 }
