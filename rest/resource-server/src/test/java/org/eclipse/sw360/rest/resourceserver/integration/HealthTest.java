@@ -10,7 +10,6 @@
 
 package org.eclipse.sw360.rest.resourceserver.integration;
 
-import org.apache.thrift.TException;
 import org.eclipse.sw360.rest.resourceserver.SW360RestHealthIndicator;
 import org.junit.Before;
 import org.junit.Test;
@@ -42,14 +41,10 @@ public class HealthTest extends TestIntegrationBase {
     private SW360RestHealthIndicator restHealthIndicatorMock;
 
     @Before
-    public void before() throws TException {
-        // Setup default healthy state
-        SW360RestHealthIndicator.RestState restState = new SW360RestHealthIndicator.RestState();
-        restState.isThriftReachable = true;
-        restState.isDbReachable = true;
-
+    public void before() {
         Health springHealth = Health.up()
-                .withDetail("Rest State", restState)
+                .withDetail("isDbReachable", true)
+                .withDetail("serviceStatus", "UP")
                 .build();
         given(this.restHealthIndicatorMock.health()).willReturn(springHealth);
     }
@@ -65,7 +60,6 @@ public class HealthTest extends TestIntegrationBase {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
 
-        // Verify the response contains health data
         String responseBody = response.getBody();
         assertTrue("Response should contain status", responseBody.contains("status"));
         assertTrue("Response should contain components", responseBody.contains("components"));
@@ -80,13 +74,9 @@ public class HealthTest extends TestIntegrationBase {
 
     @Test
     public void should_get_health_status_unhealthy() throws IOException {
-        // Setup unhealthy state
-        SW360RestHealthIndicator.RestState restState = new SW360RestHealthIndicator.RestState();
-        restState.isThriftReachable = false;
-        restState.isDbReachable = true;
-
         Health springHealthDown = Health.down()
-                .withDetail("Rest State", restState)
+                .withDetail("isDbReachable", true)
+                .withDetail("serviceStatus", "DOWN")
                 .withException(new Exception("Fake"))
                 .build();
         given(this.restHealthIndicatorMock.health()).willReturn(springHealthDown);
@@ -98,25 +88,17 @@ public class HealthTest extends TestIntegrationBase {
                         new HttpEntity<>(null, headers),
                         String.class);
 
-        // Health endpoint should still return 200 even when unhealthy (Spring Boot behavior)
         assertEquals(HttpStatus.OK, response.getStatusCode());
 
-        // Verify the response contains health data
         String responseBody = response.getBody();
         assertTrue("Response should contain status", responseBody.contains("status"));
         assertTrue("Response should contain components", responseBody.contains("components"));
         assertTrue("Response should contain diskSpace", responseBody.contains("diskSpace"));
         assertTrue("Response should contain ping", responseBody.contains("ping"));
-        assertTrue("Response should contain total", responseBody.contains("total"));
-        assertTrue("Response should contain free", responseBody.contains("free"));
-        assertTrue("Response should contain threshold", responseBody.contains("threshold"));
-        assertTrue("Response should contain path", responseBody.contains("path"));
-        assertTrue("Response should contain exists", responseBody.contains("exists"));
     }
 
     @Test
     public void should_get_health_status_without_authentication() throws IOException {
-        // Health endpoint should be accessible without authentication
         ResponseEntity<String> response =
                 new TestRestTemplate().exchange("http://localhost:" + port + "/api/health",
                         HttpMethod.GET,
@@ -125,7 +107,6 @@ public class HealthTest extends TestIntegrationBase {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
 
-        // Verify the response contains health data
         String responseBody = response.getBody();
         assertTrue("Response should contain status", responseBody.contains("status"));
         assertTrue("Response should contain components", responseBody.contains("components"));

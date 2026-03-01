@@ -33,15 +33,11 @@ public class HealthSpecTest extends TestRestDocsSpecBase{
 
     @Test
     public void should_document_get_health() throws Exception {
-        SW360RestHealthIndicator.RestState restState = new SW360RestHealthIndicator.RestState();
-        restState.isThriftReachable = true;
-        restState.isDbReachable = true;
-
         Health spring_health = Health.up()
-                .withDetail("Rest State", restState)
+                .withDetail("isDbReachable", true)
+                .withDetail("serviceStatus", "UP")
                 .build();
         given(this.restHealthIndicatorMock.health()).willReturn(spring_health);
-
 
         mockMvc.perform(get("/api/health")
                     .accept(MediaType.APPLICATION_JSON))
@@ -62,12 +58,9 @@ public class HealthSpecTest extends TestRestDocsSpecBase{
 
     @Test
     public void should_document_get_health_unhealthy() throws Exception {
-        SW360RestHealthIndicator.RestState restState = new SW360RestHealthIndicator.RestState();
-        restState.isThriftReachable = false;
-        restState.isDbReachable = true;
-
         Health spring_health_down = Health.down()
-                .withDetail("Rest State", restState)
+                .withDetail("isDbReachable", true)
+                .withDetail("serviceStatus", "DOWN")
                 .withException(new Exception("Fake"))
                 .build();
         given(this.restHealthIndicatorMock.health()).willReturn(spring_health_down);

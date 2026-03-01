@@ -57,10 +57,13 @@ public class SW360RestHealthIndicator implements HealthIndicator {
 
     private boolean isDbReachable() {
         try {
-            DatabaseInstanceCloudant db = new DatabaseInstanceCloudant(DatabaseSettings.getConfiguredClient());
-            return db.checkIfDbExists(DatabaseSettings.COUCH_DB_ATTACHMENTS);
+            return makeDatabaseInstance().checkIfDbExists(DatabaseSettings.COUCH_DB_ATTACHMENTS);
         } catch (Exception e) {
             return false;
         }
+    }
+
+    protected DatabaseInstanceCloudant makeDatabaseInstance() {
+        return new DatabaseInstanceCloudant(DatabaseSettings.getConfiguredClient());
     }
 }

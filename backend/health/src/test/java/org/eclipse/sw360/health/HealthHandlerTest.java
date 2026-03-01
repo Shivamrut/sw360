@@ -12,8 +12,8 @@ package org.eclipse.sw360.health;
 import org.eclipse.sw360.datahandler.TestUtils;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.common.DatabaseSettingsTest;
-import org.eclipse.sw360.datahandler.thrift.health.Health;
-import org.eclipse.sw360.datahandler.thrift.health.Status;
+import org.eclipse.sw360.services.health.Health;
+import org.eclipse.sw360.services.health.Status;
 import org.eclipse.sw360.health.db.HealthDatabaseHandler;
 import org.junit.Test;
 
@@ -35,7 +35,7 @@ public class HealthHandlerTest {
         TestUtils.deleteAllDatabases();
         HealthHandler healthHandler = new HealthHandler(DatabaseSettingsTest.getConfiguredClient());
         final Health health = healthHandler.getHealthOfSpecificDbs(DATABASES_TO_CHECK);
-        assertEquals(Status.DOWN, health.status);
+        assertEquals(Status.DOWN, health.getStatus());
         assertEquals(DATABASES_TO_CHECK.size(), health.getDetails().size());
     }
 
@@ -47,7 +47,7 @@ public class HealthHandlerTest {
 
         HealthHandler healthHandler = new HealthHandler(DatabaseSettingsTest.getConfiguredClient());
         final Health health = healthHandler.getHealthOfSpecificDbs(DATABASES_TO_CHECK);
-        assertEquals(Status.UP, health.status);
+        assertEquals(Status.UP, health.getStatus());
         assertEquals(new HashMap<>(), health.getDetails());
 
         for (String database : DATABASES_TO_CHECK) {

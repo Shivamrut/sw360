@@ -62,10 +62,8 @@ public class Sw360ResourceServer extends SpringBootServletInitializer {
                 "SW360Rest": {
                   "status": "UP",
                   "details": {
-                    "Rest State": {
-                      "isDbReachable": true,
-                      "isThriftReachable": true
-                    }
+                    "isDbReachable": true,
+                    "serviceStatus": "UP"
                   }
                 },
                 "ping": {
