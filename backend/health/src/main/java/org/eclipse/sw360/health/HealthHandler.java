@@ -14,7 +14,6 @@ import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.health.db.HealthDatabaseHandler;
 import org.eclipse.sw360.services.health.Health;
 import org.eclipse.sw360.services.health.HealthService;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.net.MalformedURLException;
