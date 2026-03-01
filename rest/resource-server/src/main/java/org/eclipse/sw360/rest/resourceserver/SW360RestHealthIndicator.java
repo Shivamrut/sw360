@@ -11,12 +11,8 @@
 package org.eclipse.sw360.rest.resourceserver;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import org.apache.thrift.TException;
-import org.eclipse.sw360.datahandler.cloudantclient.DatabaseInstanceCloudant;
-import org.eclipse.sw360.datahandler.common.DatabaseSettings;
-import org.eclipse.sw360.datahandler.thrift.ThriftClients;
-import org.eclipse.sw360.datahandler.thrift.health.HealthService;
-import org.eclipse.sw360.datahandler.thrift.health.Status;
+import org.eclipse.sw360.services.health.HealthService;
+import org.eclipse.sw360.services.health.Status;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
@@ -26,6 +22,12 @@ import java.util.List;
 
 @Component
 public class SW360RestHealthIndicator implements HealthIndicator {
+    private final HealthService healthService;
+
+    public SW360RestHealthIndicator(HealthService healthService) {
+        this.healthService = healthService;
+    }
+
     @Override
     public Health health() {
         List<Exception> exceptions = new ArrayList<>();
@@ -47,55 +49,33 @@ public class SW360RestHealthIndicator implements HealthIndicator {
 
     private RestState check(List<Exception> exception) {
         RestState restState = new RestState();
-        restState.isDbReachable = isDbReachable(exception);
-        restState.isThriftReachable = isThriftReachable(exception);
+        restState.isServiceReachable = isServiceReachable(exception);
         return restState;
     }
 
-    private boolean isDbReachable(List<Exception> exception) {
-        DatabaseInstanceCloudant databaseInstance = makeDatabaseInstance();
+    private boolean isServiceReachable(List<Exception> exception) {
         try {
-            return databaseInstance.checkIfDbExists(DatabaseSettings.COUCH_DB_ATTACHMENTS);
+            final org.eclipse.sw360.services.health.Health serviceHealth = healthService.getHealth();
+            if (serviceHealth.getStatus().equals(Status.UP)) {
+                return true;
+            } else {
+                exception.add(
+                        new Exception(serviceHealth.getStatus().toString(),
+                                new Throwable(serviceHealth.getDetails().toString())));
+                return false;
+            }
         } catch (Exception e) {
             exception.add(e);
             return false;
         }
     }
 
-    private boolean isThriftReachable(List<Exception> exception) {
-        HealthService.Iface healthClient = makeHealthClient();
-        try {
-            final org.eclipse.sw360.datahandler.thrift.health.Health health = healthClient.getHealth();
-            if (health.getStatus().equals(Status.UP)) {
-                return true;
-            } else {
-                exception.add(
-                        new Exception(health.getStatus().toString(),
-                                new Throwable(health.getDetails().toString())));
-                return false;
-            }
-        } catch (TException e) {
-            exception.add(e);
-            return false;
-        }
-    }
-
-    protected HealthService.Iface makeHealthClient() {
-        return new ThriftClients().makeHealthClient();
-    }
-
-    protected DatabaseInstanceCloudant makeDatabaseInstance() {
-        return new DatabaseInstanceCloudant(DatabaseSettings.getConfiguredClient());
-    }
-
     public static class RestState {
         @JsonInclude
-        public boolean isDbReachable;
+        public boolean isServiceReachable;
 
-        @JsonInclude
-        public boolean isThriftReachable;
         boolean isUp() {
-            return isDbReachable && isThriftReachable;
+            return isServiceReachable;
         }
     }
 }
