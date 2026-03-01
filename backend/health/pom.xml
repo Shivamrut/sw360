@@ -17,7 +17,7 @@
     </parent>
 
     <artifactId>backend-health</artifactId>
-    <packaging>war</packaging>
+    <packaging>jar</packaging>
     <name>backend-health</name>
     <properties>
         <artifact.deploy.dir>${backend.deploy.dir}</artifact.deploy.dir>
@@ -30,6 +30,11 @@
         <dependency>
             <groupId>org.eclipse.sw360</groupId>
             <artifactId>backend-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.sw360</groupId>
+            <artifactId>service-api</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>
