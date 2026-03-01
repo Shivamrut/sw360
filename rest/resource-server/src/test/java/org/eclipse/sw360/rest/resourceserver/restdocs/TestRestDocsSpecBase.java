@@ -30,6 +30,7 @@ import org.eclipse.sw360.rest.resourceserver.configuration.SW360ConfigurationsSe
 import org.eclipse.sw360.rest.resourceserver.security.basic.Sw360CustomUserDetailsService;
 import org.eclipse.sw360.rest.resourceserver.security.basic.Sw360GrantedAuthority;
 import org.eclipse.sw360.rest.resourceserver.user.Sw360UserService;
+import org.eclipse.sw360.services.health.HealthService;
 import org.junit.Before;
 import org.junit.Rule;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,6 +90,9 @@ public abstract class TestRestDocsSpecBase {
 
     @MockitoBean
     protected SW360ConfigurationsService sw360ConfigurationsServiceMock;
+
+    @MockitoBean
+    protected HealthService healthServiceMock;
 
     @Before
     public void setupRestDocs() {
