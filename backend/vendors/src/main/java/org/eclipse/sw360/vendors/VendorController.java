@@ -20,6 +20,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,10 +30,34 @@ import java.util.Set;
 @RequestMapping("/api/vendors")
 public class VendorController {
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class PaginatedVendorResponse {
+        private PaginationData pagination;
+        private List<Vendor> data;
+
+        public PaginatedVendorResponse() {}
+        public PaginatedVendorResponse(PaginationData pagination, List<Vendor> data) {
+            this.pagination = pagination;
+            this.data = data;
+        }
+        public PaginationData getPagination() { return pagination; }
+        public void setPagination(PaginationData pagination) { this.pagination = pagination; }
+        public List<Vendor> getData() { return data; }
+        public void setData(List<Vendor> data) { this.data = data; }
+    }
+
     private final VendorHandler vendorHandler;
 
     public VendorController(VendorHandler vendorHandler) {
         this.vendorHandler = vendorHandler;
+    }
+
+    private PaginatedVendorResponse toPaginatedResponse(Map<PaginationData, List<Vendor>> result) {
+        if (result == null || result.isEmpty()) {
+            return new PaginatedVendorResponse(null, List.of());
+        }
+        var entry = result.entrySet().iterator().next();
+        return new PaginatedVendorResponse(entry.getKey(), entry.getValue());
     }
 
     @GetMapping("/{id}")
@@ -44,7 +70,7 @@ public class VendorController {
     }
 
     @GetMapping
-    public ResponseEntity<Map<PaginationData, List<Vendor>>> getAllVendors(
+    public ResponseEntity<PaginatedVendorResponse> getAllVendors(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "0") int sort,
@@ -55,7 +81,7 @@ public class VendorController {
                 .setSortColumnNumber(sort)
                 .setAscending(ascending);
         Map<PaginationData, List<Vendor>> result = vendorHandler.getAllVendorsPaginated(pageData);
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(toPaginatedResponse(result));
     }
 
     @GetMapping("/names")
@@ -64,7 +90,7 @@ public class VendorController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<Map<PaginationData, List<Vendor>>> searchVendors(
+    public ResponseEntity<PaginatedVendorResponse> searchVendors(
             @RequestParam String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -76,7 +102,7 @@ public class VendorController {
                 .setSortColumnNumber(sort)
                 .setAscending(ascending);
         Map<PaginationData, List<Vendor>> result = vendorHandler.searchVendors(q, pageData);
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(toPaginatedResponse(result));
     }
 
     @GetMapping("/search/ids")
