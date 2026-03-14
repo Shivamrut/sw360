@@ -11,21 +11,23 @@
 package org.eclipse.sw360.rest.resourceserver;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseInstanceCloudant;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
-import org.eclipse.sw360.datahandler.thrift.ThriftClients;
-import org.eclipse.sw360.datahandler.thrift.health.HealthService;
-import org.eclipse.sw360.datahandler.thrift.health.Status;
+import org.eclipse.sw360.services.health.HealthResponse;
+import org.eclipse.sw360.services.health.HealthStatus;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Component
 public class SW360RestHealthIndicator implements HealthIndicator {
+
+    private static final String HEALTH_SERVICE_URL = "http://localhost:8080/health/api/health";
+
     @Override
     public Health health() {
         List<Exception> exceptions = new ArrayList<>();
@@ -48,7 +50,7 @@ public class SW360RestHealthIndicator implements HealthIndicator {
     private RestState check(List<Exception> exception) {
         RestState restState = new RestState();
         restState.isDbReachable = isDbReachable(exception);
-        restState.isThriftReachable = isThriftReachable(exception);
+        restState.isHealthServiceReachable = isHealthServiceReachable(exception);
         return restState;
     }
 
@@ -62,26 +64,26 @@ public class SW360RestHealthIndicator implements HealthIndicator {
         }
     }
 
-    private boolean isThriftReachable(List<Exception> exception) {
-        HealthService.Iface healthClient = makeHealthClient();
+    private boolean isHealthServiceReachable(List<Exception> exception) {
         try {
-            final org.eclipse.sw360.datahandler.thrift.health.Health health = healthClient.getHealth();
-            if (health.getStatus().equals(Status.UP)) {
+            RestTemplate restTemplate = createRestTemplate();
+            HealthResponse response = restTemplate.getForObject(HEALTH_SERVICE_URL, HealthResponse.class);
+            if (response != null && HealthStatus.UP.equals(response.getStatus())) {
                 return true;
             } else {
-                exception.add(
-                        new Exception(health.getStatus().toString(),
-                                new Throwable(health.getDetails().toString())));
+                String details = response != null ? String.valueOf(response.getDetails()) : "null response";
+                String status = response != null ? response.getStatus().toString() : "NO_RESPONSE";
+                exception.add(new Exception(status, new Throwable(details)));
                 return false;
             }
-        } catch (TException e) {
+        } catch (Exception e) {
             exception.add(e);
             return false;
         }
     }
 
-    protected HealthService.Iface makeHealthClient() {
-        return new ThriftClients().makeHealthClient();
+    protected RestTemplate createRestTemplate() {
+        return new RestTemplate();
     }
 
     protected DatabaseInstanceCloudant makeDatabaseInstance() {
@@ -93,9 +95,10 @@ public class SW360RestHealthIndicator implements HealthIndicator {
         public boolean isDbReachable;
 
         @JsonInclude
-        public boolean isThriftReachable;
+        public boolean isHealthServiceReachable;
+
         boolean isUp() {
-            return isDbReachable && isThriftReachable;
+            return isDbReachable && isHealthServiceReachable;
         }
     }
 }
