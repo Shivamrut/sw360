@@ -65,12 +65,11 @@ public class Sw360VendorService {
         String url = vendorServiceUrl + "/api/vendors?page={page}&size={size}&sort={sort}&ascending={ascending}";
         Map<String, Object> params = buildPaginationParams(pageData);
 
-        ResponseEntity<Map<org.eclipse.sw360.services.common.PaginationData,
-                List<org.eclipse.sw360.services.vendor.Vendor>>> response =
+        ResponseEntity<PaginatedVendorResponse> response =
                 vendorRestTemplate.exchange(url, HttpMethod.GET, null,
                         new ParameterizedTypeReference<>() {}, params);
 
-        return convertPaginatedResult(response.getBody());
+        return convertPaginatedResponse(response.getBody());
     }
 
     public Map<PaginationData, List<Vendor>> searchVendors(String searchText, Pageable pageable) {
@@ -81,12 +80,11 @@ public class Sw360VendorService {
         Map<String, Object> params = buildPaginationParams(pageData);
         params.put("q", searchText);
 
-        ResponseEntity<Map<org.eclipse.sw360.services.common.PaginationData,
-                List<org.eclipse.sw360.services.vendor.Vendor>>> response =
+        ResponseEntity<PaginatedVendorResponse> response =
                 vendorRestTemplate.exchange(url, HttpMethod.GET, null,
                         new ParameterizedTypeReference<>() {}, params);
 
-        return convertPaginatedResult(response.getBody());
+        return convertPaginatedResponse(response.getBody());
     }
 
     public Vendor getVendorById(String vendorId) {
@@ -222,17 +220,14 @@ public class Sw360VendorService {
 
     private List<Vendor> getAllVendorList() {
         String url = vendorServiceUrl + "/api/vendors?page=0&size=10000&sort=0&ascending=true";
-        ResponseEntity<Map<org.eclipse.sw360.services.common.PaginationData,
-                List<org.eclipse.sw360.services.vendor.Vendor>>> response =
+        ResponseEntity<PaginatedVendorResponse> response =
                 vendorRestTemplate.exchange(url, HttpMethod.GET, null,
                         new ParameterizedTypeReference<>() {});
 
-        Map<org.eclipse.sw360.services.common.PaginationData,
-                List<org.eclipse.sw360.services.vendor.Vendor>> body = response.getBody();
-        if (body == null || body.isEmpty()) return List.of();
+        PaginatedVendorResponse body = response.getBody();
+        if (body == null || body.data == null) return List.of();
 
-        List<org.eclipse.sw360.services.vendor.Vendor> pojoList = body.values().iterator().next();
-        return pojoList.stream().map(this::toThriftVendor).collect(Collectors.toList());
+        return body.data.stream().map(this::toThriftVendor).collect(Collectors.toList());
     }
 
     public Set<Release> getAllReleaseList(String vendorId) throws TException {
@@ -306,25 +301,27 @@ public class Sw360VendorService {
         return params;
     }
 
-    private Map<PaginationData, List<Vendor>> convertPaginatedResult(
-            Map<org.eclipse.sw360.services.common.PaginationData,
-                    List<org.eclipse.sw360.services.vendor.Vendor>> pojoResult) {
-        if (pojoResult == null || pojoResult.isEmpty()) return Map.of();
+    public static class PaginatedVendorResponse {
+        public org.eclipse.sw360.services.common.PaginationData pagination;
+        public List<org.eclipse.sw360.services.vendor.Vendor> data;
+    }
+
+    private Map<PaginationData, List<Vendor>> convertPaginatedResponse(PaginatedVendorResponse pojoResult) {
+        if (pojoResult == null) return Map.of();
 
         Map<PaginationData, List<Vendor>> result = new HashMap<>();
-        for (var entry : pojoResult.entrySet()) {
-            org.eclipse.sw360.services.common.PaginationData pojoPd = entry.getKey();
-            PaginationData thriftPd = new PaginationData()
-                    .setRowsPerPage(pojoPd.getRowsPerPage())
-                    .setDisplayStart(pojoPd.getDisplayStart())
-                    .setAscending(pojoPd.isAscending())
-                    .setSortColumnNumber(pojoPd.getSortColumnNumber())
-                    .setTotalRowCount(pojoPd.getTotalRowCount());
-            List<Vendor> thriftVendors = entry.getValue().stream()
-                    .map(this::toThriftVendor)
-                    .collect(Collectors.toList());
-            result.put(thriftPd, thriftVendors);
-        }
+        org.eclipse.sw360.services.common.PaginationData pojoPd = pojoResult.pagination;
+        PaginationData thriftPd = pojoPd != null ? new PaginationData()
+                .setRowsPerPage(pojoPd.getRowsPerPage())
+                .setDisplayStart(pojoPd.getDisplayStart())
+                .setAscending(pojoPd.isAscending())
+                .setSortColumnNumber(pojoPd.getSortColumnNumber())
+                .setTotalRowCount(pojoPd.getTotalRowCount())
+                : new PaginationData();
+        List<Vendor> thriftVendors = pojoResult.data != null
+                ? pojoResult.data.stream().map(this::toThriftVendor).collect(Collectors.toList())
+                : List.of();
+        result.put(thriftPd, thriftVendors);
         return result;
     }
 
