@@ -30,7 +30,7 @@ import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
 import org.eclipse.sw360.datahandler.thrift.configurations.SW360ConfigsService;
 import org.eclipse.sw360.datahandler.thrift.cvesearch.CveSearchService;
 import org.eclipse.sw360.datahandler.thrift.fossology.FossologyService;
-import org.eclipse.sw360.datahandler.thrift.health.HealthService;
+
 import org.eclipse.sw360.datahandler.thrift.licenseinfo.LicenseInfoService;
 import org.eclipse.sw360.datahandler.thrift.licenses.LicenseService;
 import org.eclipse.sw360.datahandler.thrift.moderation.ModerationService;
@@ -91,7 +91,7 @@ public class ThriftClients {
     private static final String VM_SERVICE_URL = "/vmcomponents/thrift";
     private static final String WSIMPORT_SERVICE_URL = "/wsimport/thrift";
     private static final String CHANGELOGS_SERVICE_URL = "/changelogs/thrift";
-    private static final String HEALTH_SERVICE_URL = "/health/thrift";
+
     private static final String SPDX_SERVICE_URL = "/spdxdocument/thrift";
     private static final String SPDX_DOCUMENT_INFO_SERVICE_URL = "/spdxdocumentcreationinfo/thrift";
     private static final String SPDX_PACKAGE_INFO_SERVICE_URL = "/spdxpackageinfo/thrift";
@@ -230,9 +230,6 @@ public class ThriftClients {
         return new ChangeLogsService.Client(makeProtocol(BACKEND_URL, CHANGELOGS_SERVICE_URL));
     }
 
-    public HealthService.Iface makeHealthClient() {
-        return new HealthService.Client(makeProtocol(BACKEND_URL, HEALTH_SERVICE_URL));
-    }
 
     public SPDXDocumentService.Iface makeSPDXClient() {
         return new SPDXDocumentService.Client(makeProtocol(BACKEND_URL, SPDX_SERVICE_URL));
