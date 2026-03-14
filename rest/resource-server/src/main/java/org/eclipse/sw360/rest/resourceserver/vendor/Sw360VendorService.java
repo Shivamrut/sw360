@@ -1,7 +1,7 @@
 /*
  * Copyright Siemens AG, 2017. Part of the SW360 Portal Vendor.
  *
-  * This program and the accompanying materials are made
+ * This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License 2.0
  * which is available at https://www.eclipse.org/legal/epl-2.0/
  *
@@ -23,118 +23,148 @@ import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.users.RequestedAction;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
-import org.eclipse.sw360.datahandler.thrift.vendors.VendorService;
 import org.eclipse.sw360.datahandler.thrift.components.ComponentService;
 import org.eclipse.sw360.datahandler.thrift.components.Release;
 import org.eclipse.sw360.datahandler.thrift.vendors.VendorSortColumn;
 import org.eclipse.sw360.rest.resourceserver.core.BadRequestClientException;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class Sw360VendorService {
+
+    @Value("${sw360.vendors-service-url:http://localhost:8080}")
+    private String vendorServiceUrl;
+
+    private final RestTemplate vendorRestTemplate = new RestTemplate();
+
     public Map<PaginationData, List<Vendor>> getVendors(Pageable pageable) {
-        try {
-            VendorService.Iface sw360VendorClient = getThriftVendorClient();
-            PaginationData pageData = pageableToPaginationData(pageable,
-                    VendorSortColumn.BY_FULLNAME, true);
-            return sw360VendorClient.getAllVendorListPaginated(pageData);
-        } catch (TException e) {
-            throw new RuntimeException(e);
-        }
+        PaginationData pageData = pageableToPaginationData(pageable,
+                VendorSortColumn.BY_FULLNAME, true);
+
+        String url = vendorServiceUrl + "/api/vendors?page={page}&size={size}&sort={sort}&ascending={ascending}";
+        Map<String, Object> params = buildPaginationParams(pageData);
+
+        ResponseEntity<Map<org.eclipse.sw360.services.common.PaginationData,
+                List<org.eclipse.sw360.services.vendor.Vendor>>> response =
+                vendorRestTemplate.exchange(url, HttpMethod.GET, null,
+                        new ParameterizedTypeReference<>() {}, params);
+
+        return convertPaginatedResult(response.getBody());
     }
 
     public Map<PaginationData, List<Vendor>> searchVendors(String searchText, Pageable pageable) {
-        try {
-            VendorService.Iface sw360VendorClient = getThriftVendorClient();
-            PaginationData pageData = pageableToPaginationData(pageable,
-                    VendorSortColumn.BY_FULLNAME, true);
-            return sw360VendorClient.searchVendors(searchText, pageData);
-        } catch (TException e) {
-            throw new RuntimeException(e);
-        }
+        PaginationData pageData = pageableToPaginationData(pageable,
+                VendorSortColumn.BY_FULLNAME, true);
+
+        String url = vendorServiceUrl + "/api/vendors/search?q={q}&page={page}&size={size}&sort={sort}&ascending={ascending}";
+        Map<String, Object> params = buildPaginationParams(pageData);
+        params.put("q", searchText);
+
+        ResponseEntity<Map<org.eclipse.sw360.services.common.PaginationData,
+                List<org.eclipse.sw360.services.vendor.Vendor>>> response =
+                vendorRestTemplate.exchange(url, HttpMethod.GET, null,
+                        new ParameterizedTypeReference<>() {}, params);
+
+        return convertPaginatedResult(response.getBody());
     }
 
     public Vendor getVendorById(String vendorId) {
-        try {
-            VendorService.Iface sw360VendorClient = getThriftVendorClient();
-            return sw360VendorClient.getByID(vendorId);
-        } catch (TException e) {
-            throw new RuntimeException(e);
-        }
+        String url = vendorServiceUrl + "/api/vendors/{id}";
+        org.eclipse.sw360.services.vendor.Vendor pojo =
+                vendorRestTemplate.getForObject(url, org.eclipse.sw360.services.vendor.Vendor.class, vendorId);
+        return toThriftVendor(pojo);
     }
 
     public Vendor getVendorByFullName(String fullName) {
-        try {
-            for (Vendor vendor : getAllVendorList()) {
-                if(fullName.equals(vendor.getFullname())) {
-                    return vendor;
-                }
+        List<Vendor> allVendors = getAllVendorList();
+        for (Vendor vendor : allVendors) {
+            if (fullName.equals(vendor.getFullname())) {
+                return vendor;
             }
-            return null;
-        } catch (TException e) {
-            throw new RuntimeException(e);
         }
+        return null;
     }
 
     public Vendor createVendor(Vendor vendor) {
-        try {
-            VendorService.Iface sw360VendorClient = getThriftVendorClient();
-            if (CommonUtils.isNullEmptyOrWhitespace(vendor.getFullname()) || CommonUtils.isNullEmptyOrWhitespace(vendor.getShortname())
-                    || CommonUtils.isNullEmptyOrWhitespace(vendor.getUrl())) {
-                throw new BadRequestClientException("A Vendor cannot have null or empty 'Full Name' or 'Short Name' or 'URL'!");
-            }
-            AddDocumentRequestSummary summary = sw360VendorClient.addVendor(vendor);
-            if (AddDocumentRequestStatus.SUCCESS.equals(summary.getRequestStatus())) {
-                vendor.setId(summary.getId());
-                return vendor;
-            } else if (AddDocumentRequestStatus.DUPLICATE.equals(summary.getRequestStatus())) {
-                throw new DataIntegrityViolationException("A Vendor with same full name '" + vendor.getFullname() + "' and URL already exists!");
-            } else if (AddDocumentRequestStatus.FAILURE.equals(summary.getRequestStatus())) {
-                throw new BadRequestClientException(summary.getMessage());
-            }
-            return null;
-        } catch (TException e) {
-            throw new RuntimeException(e);
+        if (CommonUtils.isNullEmptyOrWhitespace(vendor.getFullname()) || CommonUtils.isNullEmptyOrWhitespace(vendor.getShortname())
+                || CommonUtils.isNullEmptyOrWhitespace(vendor.getUrl())) {
+            throw new BadRequestClientException("A Vendor cannot have null or empty 'Full Name' or 'Short Name' or 'URL'!");
         }
+
+        org.eclipse.sw360.services.vendor.Vendor pojoVendor = fromThriftVendor(vendor);
+        String url = vendorServiceUrl + "/api/vendors";
+        ResponseEntity<org.eclipse.sw360.services.common.AddDocumentRequestSummary> response =
+                vendorRestTemplate.postForEntity(url,
+                        pojoVendor,
+                        org.eclipse.sw360.services.common.AddDocumentRequestSummary.class);
+
+        org.eclipse.sw360.services.common.AddDocumentRequestSummary summary = response.getBody();
+        if (summary != null && summary.getRequestStatus() ==
+                org.eclipse.sw360.services.common.AddDocumentRequestStatus.SUCCESS) {
+            vendor.setId(summary.getId());
+            return vendor;
+        } else if (summary != null && summary.getRequestStatus() ==
+                org.eclipse.sw360.services.common.AddDocumentRequestStatus.DUPLICATE) {
+            throw new DataIntegrityViolationException("A Vendor with same full name '" + vendor.getFullname() + "' and URL already exists!");
+        } else if (summary != null && summary.getRequestStatus() ==
+                org.eclipse.sw360.services.common.AddDocumentRequestStatus.FAILURE) {
+            throw new BadRequestClientException(summary.getMessage());
+        }
+        return null;
     }
 
     public RequestStatus vendorUpdate(Vendor vendor, User sw360User, String id) {
-        try {
-            VendorService.Iface sw360VendorClient = getThriftVendorClient();
-            Vendor existingVendor = sw360VendorClient.getByID(id);
-            if (existingVendor != null) {
-                if (vendor.getShortname() != null) {
-                    existingVendor.setShortname(vendor.getShortname());
-                }
-                if (vendor.getFullname() != null) {
-                    existingVendor.setFullname(vendor.getFullname());
-                }
-                if (vendor.getUrl() != null) {
-                    existingVendor.setUrl(vendor.getUrl());
-                }
+        Vendor existingVendor = getVendorById(id);
+        if (existingVendor != null) {
+            if (vendor.getShortname() != null) {
+                existingVendor.setShortname(vendor.getShortname());
             }
-            RequestStatus requestStatus = sw360VendorClient.updateVendor(existingVendor, sw360User);
-            return requestStatus;
-        } catch (TException e) {
-            throw new RuntimeException(e);
+            if (vendor.getFullname() != null) {
+                existingVendor.setFullname(vendor.getFullname());
+            }
+            if (vendor.getUrl() != null) {
+                existingVendor.setUrl(vendor.getUrl());
+            }
         }
+
+        org.eclipse.sw360.services.vendor.Vendor pojoVendor = fromThriftVendor(existingVendor);
+        String url = vendorServiceUrl + "/api/vendors/{id}";
+        HttpHeaders headers = new HttpHeaders();
+        if (sw360User != null && sw360User.getEmail() != null) {
+            headers.set("X-SW360-User", sw360User.getEmail());
+        }
+        HttpEntity<org.eclipse.sw360.services.vendor.Vendor> entity = new HttpEntity<>(pojoVendor, headers);
+        ResponseEntity<org.eclipse.sw360.services.common.RequestStatus> response =
+                vendorRestTemplate.exchange(url, HttpMethod.PUT, entity,
+                        org.eclipse.sw360.services.common.RequestStatus.class, id);
+
+        org.eclipse.sw360.services.common.RequestStatus pojoStatus = response.getBody();
+        return pojoStatus != null ? RequestStatus.findByValue(pojoStatus.getValue()) : RequestStatus.FAILURE;
     }
 
     public RequestStatus deleteVendorByid(String vendorId, User sw360User) throws TException {
         try {
-            VendorService.Iface sw360VendorClient = getThriftVendorClient();
             ComponentService.Iface componentClient = getThriftComponentClient();
             List<Release> releases = componentClient.getReleasesFromVendorId(vendorId, sw360User);
 
@@ -149,25 +179,35 @@ public class Sw360VendorService {
                 if (status != RequestStatus.SUCCESS) return status;
             }
 
-            return sw360VendorClient.deleteVendor(vendorId, sw360User);
+            String url = vendorServiceUrl + "/api/vendors/{id}";
+            HttpHeaders headers = new HttpHeaders();
+            if (sw360User != null && sw360User.getEmail() != null) {
+                headers.set("X-SW360-User", sw360User.getEmail());
+            }
+            HttpEntity<?> entity = new HttpEntity<>(headers);
+            ResponseEntity<org.eclipse.sw360.services.common.RequestStatus> response =
+                    vendorRestTemplate.exchange(url, HttpMethod.DELETE, entity,
+                            org.eclipse.sw360.services.common.RequestStatus.class, vendorId);
+
+            org.eclipse.sw360.services.common.RequestStatus pojoStatus = response.getBody();
+            return pojoStatus != null ? RequestStatus.findByValue(pojoStatus.getValue()) : RequestStatus.FAILURE;
         } catch (TException e) {
             throw new TException(e);
         }
     }
-    public void deleteAllVendors(User sw360User) {
-        try {
-            VendorService.Iface sw360VendorClient = getThriftVendorClient();
-            List<Vendor> vendors = getAllVendorList();
-            for (Vendor vendor : vendors) {
-                sw360VendorClient.deleteVendor(vendor.getId(), sw360User);
-            }
-        } catch (TException e) {
-            throw new RuntimeException(e);
-        }
-    }
 
-    private VendorService.Iface getThriftVendorClient() throws TTransportException {
-        return new ThriftClients().makeVendorClient();
+    public void deleteAllVendors(User sw360User) {
+        List<Vendor> vendors = getAllVendorList();
+        for (Vendor vendor : vendors) {
+            String url = vendorServiceUrl + "/api/vendors/{id}";
+            HttpHeaders headers = new HttpHeaders();
+            if (sw360User != null && sw360User.getEmail() != null) {
+                headers.set("X-SW360-User", sw360User.getEmail());
+            }
+            HttpEntity<?> entity = new HttpEntity<>(headers);
+            vendorRestTemplate.exchange(url, HttpMethod.DELETE, entity,
+                    org.eclipse.sw360.services.common.RequestStatus.class, vendor.getId());
+        }
     }
 
     public ComponentService.Iface getThriftComponentClient() throws TTransportException {
@@ -175,26 +215,48 @@ public class Sw360VendorService {
     }
 
     public ByteBuffer exportExcel() throws TException {
-        List<Vendor> vendors = getAllVendorList();
-        VendorService.Iface sw360VendorClient = getThriftVendorClient();
-        return sw360VendorClient.getVendorReportDataStream(vendors);
+        String url = vendorServiceUrl + "/api/vendors/report";
+        byte[] data = vendorRestTemplate.getForObject(url, byte[].class);
+        return data != null ? ByteBuffer.wrap(data) : ByteBuffer.allocate(0);
     }
 
-    private List<Vendor> getAllVendorList() throws TException {
-        VendorService.Iface sw360VendorClient = getThriftVendorClient();
-        return sw360VendorClient.getAllVendors();
+    private List<Vendor> getAllVendorList() {
+        String url = vendorServiceUrl + "/api/vendors?page=0&size=10000&sort=0&ascending=true";
+        ResponseEntity<Map<org.eclipse.sw360.services.common.PaginationData,
+                List<org.eclipse.sw360.services.vendor.Vendor>>> response =
+                vendorRestTemplate.exchange(url, HttpMethod.GET, null,
+                        new ParameterizedTypeReference<>() {});
+
+        Map<org.eclipse.sw360.services.common.PaginationData,
+                List<org.eclipse.sw360.services.vendor.Vendor>> body = response.getBody();
+        if (body == null || body.isEmpty()) return List.of();
+
+        List<org.eclipse.sw360.services.vendor.Vendor> pojoList = body.values().iterator().next();
+        return pojoList.stream().map(this::toThriftVendor).collect(Collectors.toList());
     }
 
     public Set<Release> getAllReleaseList(String vendorId) throws TException {
         ComponentService.Iface componentsClient = getThriftComponentClient();
-        Set<Release> releases = componentsClient.getReleasesByVendorId(vendorId);
-        return releases;
+        return componentsClient.getReleasesByVendorId(vendorId);
     }
 
-    public RequestStatus mergeVendors(String vendorTargetId, String vendorSourceId, Vendor vendorSelection, User user) throws TException, ResourceClassNotFoundException {
-        VendorService.Iface sw360VendorClient = getThriftVendorClient();
-        RequestStatus requestStatus;
-        requestStatus =  sw360VendorClient.mergeVendors(vendorTargetId, vendorSourceId, vendorSelection, user);
+    public RequestStatus mergeVendors(String vendorTargetId, String vendorSourceId,
+                                       Vendor vendorSelection, User user)
+            throws TException, ResourceClassNotFoundException {
+        org.eclipse.sw360.services.vendor.Vendor pojoSelection = fromThriftVendor(vendorSelection);
+        String url = vendorServiceUrl + "/api/vendors/merge?targetId={targetId}&sourceId={sourceId}";
+        HttpHeaders headers = new HttpHeaders();
+        if (user != null && user.getEmail() != null) {
+            headers.set("X-SW360-User", user.getEmail());
+        }
+        HttpEntity<org.eclipse.sw360.services.vendor.Vendor> entity = new HttpEntity<>(pojoSelection, headers);
+        ResponseEntity<org.eclipse.sw360.services.common.RequestStatus> response =
+                vendorRestTemplate.exchange(url, HttpMethod.POST, entity,
+                        org.eclipse.sw360.services.common.RequestStatus.class,
+                        vendorTargetId, vendorSourceId);
+
+        org.eclipse.sw360.services.common.RequestStatus pojoStatus = response.getBody();
+        RequestStatus requestStatus = pojoStatus != null ? RequestStatus.findByValue(pojoStatus.getValue()) : RequestStatus.FAILURE;
 
         if (requestStatus == RequestStatus.IN_USE) {
             throw new BadRequestClientException("Vendor used as source or target has an open MR");
@@ -207,12 +269,6 @@ public class Sw360VendorService {
         return requestStatus;
     }
 
-    /**
-     * Converts a Pageable object to a PaginationData object.
-     *
-     * @param pageable the Pageable object to convert
-     * @return a PaginationData object representing the pagination information
-     */
     private static PaginationData pageableToPaginationData(
             @NotNull Pageable pageable, VendorSortColumn defaultSort, Boolean defaultAscending
     ) {
@@ -225,7 +281,7 @@ public class Sw360VendorService {
             column = switch (property) {
                 case "fullname" -> VendorSortColumn.BY_FULLNAME;
                 case "shortname" -> VendorSortColumn.BY_SHORTNAME;
-                default -> column; // Default to BY_NAME if no match
+                default -> column;
             };
             ascending = order.isAscending();
         } else {
@@ -239,5 +295,73 @@ public class Sw360VendorService {
 
         return new PaginationData().setDisplayStart((int) pageable.getOffset())
                 .setRowsPerPage(pageable.getPageSize()).setSortColumnNumber(column.getValue()).setAscending(ascending);
+    }
+
+    private Map<String, Object> buildPaginationParams(PaginationData pageData) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("page", pageData.getDisplayStart() / Math.max(pageData.getRowsPerPage(), 1));
+        params.put("size", pageData.getRowsPerPage());
+        params.put("sort", pageData.getSortColumnNumber());
+        params.put("ascending", pageData.isAscending());
+        return params;
+    }
+
+    private Map<PaginationData, List<Vendor>> convertPaginatedResult(
+            Map<org.eclipse.sw360.services.common.PaginationData,
+                    List<org.eclipse.sw360.services.vendor.Vendor>> pojoResult) {
+        if (pojoResult == null || pojoResult.isEmpty()) return Map.of();
+
+        Map<PaginationData, List<Vendor>> result = new HashMap<>();
+        for (var entry : pojoResult.entrySet()) {
+            org.eclipse.sw360.services.common.PaginationData pojoPd = entry.getKey();
+            PaginationData thriftPd = new PaginationData()
+                    .setRowsPerPage(pojoPd.getRowsPerPage())
+                    .setDisplayStart(pojoPd.getDisplayStart())
+                    .setAscending(pojoPd.isAscending())
+                    .setSortColumnNumber(pojoPd.getSortColumnNumber())
+                    .setTotalRowCount(pojoPd.getTotalRowCount());
+            List<Vendor> thriftVendors = entry.getValue().stream()
+                    .map(this::toThriftVendor)
+                    .collect(Collectors.toList());
+            result.put(thriftPd, thriftVendors);
+        }
+        return result;
+    }
+
+    private Vendor toThriftVendor(org.eclipse.sw360.services.vendor.Vendor pojo) {
+        if (pojo == null) return null;
+        Vendor thrift = new Vendor();
+        if (pojo.getId() != null) thrift.setId(pojo.getId());
+        if (pojo.getRevision() != null) thrift.setRevision(pojo.getRevision());
+        thrift.setShortname(pojo.getShortname());
+        thrift.setFullname(pojo.getFullname());
+        thrift.setUrl(pojo.getUrl());
+        if (pojo.getPermissions() != null) {
+            Map<RequestedAction, Boolean> perms = new HashMap<>();
+            pojo.getPermissions().forEach((k, v) -> {
+                try {
+                    perms.put(RequestedAction.valueOf(k), v);
+                } catch (IllegalArgumentException ignored) {}
+            });
+            thrift.setPermissions(perms);
+        }
+        return thrift;
+    }
+
+    private org.eclipse.sw360.services.vendor.Vendor fromThriftVendor(Vendor thrift) {
+        if (thrift == null) return null;
+        org.eclipse.sw360.services.vendor.Vendor pojo = new org.eclipse.sw360.services.vendor.Vendor()
+                .setId(thrift.getId())
+                .setRevision(thrift.getRevision())
+                .setType(thrift.getType())
+                .setShortname(thrift.getShortname())
+                .setFullname(thrift.getFullname())
+                .setUrl(thrift.getUrl());
+        if (thrift.getPermissions() != null) {
+            Map<String, Boolean> perms = new HashMap<>();
+            thrift.getPermissions().forEach((k, v) -> perms.put(k.name(), v));
+            pojo.setPermissions(perms);
+        }
+        return pojo;
     }
 }
