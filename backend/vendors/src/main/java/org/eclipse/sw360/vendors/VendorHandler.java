@@ -9,124 +9,150 @@
  */
 package org.eclipse.sw360.vendors;
 
+import com.ibm.cloud.cloudant.v1.Cloudant;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
 import org.eclipse.sw360.datahandler.db.VendorSearchHandler;
-import org.eclipse.sw360.datahandler.thrift.AddDocumentRequestSummary;
-import org.eclipse.sw360.datahandler.thrift.PaginationData;
-import org.eclipse.sw360.datahandler.thrift.RequestStatus;
-import org.eclipse.sw360.datahandler.thrift.users.User;
-import org.eclipse.sw360.datahandler.thrift.vendors.Vendor;
-import org.eclipse.sw360.datahandler.thrift.vendors.VendorService;
-
-import com.ibm.cloud.cloudant.v1.Cloudant;
+import org.eclipse.sw360.services.common.AddDocumentRequestSummary;
+import org.eclipse.sw360.services.common.PaginationData;
+import org.eclipse.sw360.services.common.RequestStatus;
+import org.eclipse.sw360.services.vendor.Vendor;
+import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
-import static org.eclipse.sw360.datahandler.common.SW360Assert.*;
-public class VendorHandler implements VendorService.Iface {
+@Service
+public class VendorHandler {
 
     private final VendorDatabaseHandler vendorDatabaseHandler;
     private final VendorSearchHandler vendorSearchHandler;
 
-    public VendorHandler() throws IOException {
-        DatabaseConnectorCloudant databaseConnector = new DatabaseConnectorCloudant(DatabaseSettings.getConfiguredClient(), DatabaseSettings.COUCH_DB_DATABASE);
+    public VendorHandler(Cloudant client) throws IOException {
+        DatabaseConnectorCloudant databaseConnector = new DatabaseConnectorCloudant(client, DatabaseSettings.COUCH_DB_DATABASE);
         vendorDatabaseHandler = new VendorDatabaseHandler(databaseConnector);
-        vendorSearchHandler = new VendorSearchHandler(DatabaseSettings.getConfiguredClient(), DatabaseSettings.COUCH_DB_DATABASE);     // Remove release id from component
+        vendorSearchHandler = new VendorSearchHandler(client, DatabaseSettings.COUCH_DB_DATABASE);
     }
 
     public VendorHandler(Cloudant client, String dbName) throws IOException {
         DatabaseConnectorCloudant databaseConnector = new DatabaseConnectorCloudant(client, dbName);
         vendorDatabaseHandler = new VendorDatabaseHandler(databaseConnector);
-        // Use the provided dbName for search handler to allow test databases to work correctly
-        vendorSearchHandler = new VendorSearchHandler(client, dbName != null ? dbName : DatabaseSettings.COUCH_DB_DATABASE);     // Fallback to default DB name if null
+        vendorSearchHandler = new VendorSearchHandler(client, dbName != null ? dbName : DatabaseSettings.COUCH_DB_DATABASE);
     }
 
-    @Override
-    public Vendor getByID(String id) throws TException {
-        assertNotEmpty(id);
-
-        Vendor vendor = vendorDatabaseHandler.getByID(id);
-        assertNotNull(vendor);
-
-        return vendor;
+    public Vendor getByID(String id) {
+        try {
+            org.eclipse.sw360.datahandler.thrift.vendors.Vendor thriftVendor = vendorDatabaseHandler.getByID(id);
+            return VendorConverter.fromThrift(thriftVendor);
+        } catch (TException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    @Override
-    public List<Vendor> getAllVendors() throws TException {
-        return vendorDatabaseHandler.getAllVendors();
+    public List<Vendor> getAllVendors() {
+        try {
+            return VendorConverter.fromThriftList(vendorDatabaseHandler.getAllVendors());
+        } catch (TException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    @Override
-    public Map<PaginationData, List<Vendor>> getAllVendorListPaginated(PaginationData pageData) throws TException {
-        return vendorDatabaseHandler.getAllVendors(pageData);
+    public Map<PaginationData, List<Vendor>> getAllVendorsPaginated(PaginationData pageData) {
+        try {
+            org.eclipse.sw360.datahandler.thrift.PaginationData thriftPageData =
+                    VendorConverter.toThriftPaginationData(pageData);
+            Map<org.eclipse.sw360.datahandler.thrift.PaginationData,
+                    List<org.eclipse.sw360.datahandler.thrift.vendors.Vendor>> thriftResult =
+                    vendorDatabaseHandler.getAllVendors(thriftPageData);
+
+            return thriftResult.entrySet().stream().collect(Collectors.toMap(
+                    e -> VendorConverter.fromThriftPaginationData(e.getKey()),
+                    e -> VendorConverter.fromThriftList(e.getValue())
+            ));
+        } catch (TException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    @Override
-    public Set<String> getAllVendorNames() throws TException {
-
+    public Set<String> getAllVendorNames() {
         HashSet<String> vendorNames = new HashSet<>();
         for (Vendor vendor : getAllVendors()) {
             vendorNames.add(vendor.getFullname());
             vendorNames.add(vendor.getShortname());
         }
         return vendorNames;
-
     }
 
-    @Override
-    public Map<PaginationData, List<Vendor>> searchVendors(String searchText, PaginationData pageData) throws TException {
-        return vendorSearchHandler.search(searchText, pageData);
+    public Map<PaginationData, List<Vendor>> searchVendors(String searchText, PaginationData pageData) {
+        org.eclipse.sw360.datahandler.thrift.PaginationData thriftPageData =
+                VendorConverter.toThriftPaginationData(pageData);
+        Map<org.eclipse.sw360.datahandler.thrift.PaginationData,
+                List<org.eclipse.sw360.datahandler.thrift.vendors.Vendor>> thriftResult =
+                vendorSearchHandler.search(searchText, thriftPageData);
+
+        return thriftResult.entrySet().stream().collect(Collectors.toMap(
+                e -> VendorConverter.fromThriftPaginationData(e.getKey()),
+                e -> VendorConverter.fromThriftList(e.getValue())
+        ));
     }
 
-    @Override
-    public List<String> searchVendorIds(String searchText) throws TException {
+    public List<String> searchVendorIds(String searchText) {
         return vendorSearchHandler.searchIds(searchText);
     }
 
-
-    @Override
-    public AddDocumentRequestSummary addVendor(Vendor vendor) throws TException {
-        assertNotNull(vendor);
-        assertIdUnset(vendor.getId());
-
-        return vendorDatabaseHandler.addVendor(vendor);
+    public AddDocumentRequestSummary addVendor(Vendor vendor) {
+        org.eclipse.sw360.datahandler.thrift.vendors.Vendor thriftVendor = VendorConverter.toThrift(vendor);
+        return VendorConverter.fromThriftAddDocSummary(vendorDatabaseHandler.addVendor(thriftVendor));
     }
 
-    @Override
-    public RequestStatus deleteVendor(String id, User user) throws TException {
-        assertUser(user);
-        assertId(id);
-
-        return vendorDatabaseHandler.deleteVendor(id, user);
+    public RequestStatus deleteVendor(String id, String userEmail) {
+        try {
+            org.eclipse.sw360.datahandler.thrift.users.User user = new org.eclipse.sw360.datahandler.thrift.users.User();
+            if (userEmail != null) user.setEmail(userEmail);
+            return VendorConverter.fromThriftRequestStatus(vendorDatabaseHandler.deleteVendor(id, user));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    @Override
-    public RequestStatus updateVendor(Vendor vendor, User user) throws TException {
-        assertUser(user);
-        assertNotNull(vendor);
-        assertId(vendor.getId());
-
-        return vendorDatabaseHandler.updateVendor(vendor, user);
+    public RequestStatus updateVendor(Vendor vendor, String userEmail) {
+        try {
+            org.eclipse.sw360.datahandler.thrift.vendors.Vendor thriftVendor = VendorConverter.toThrift(vendor);
+            org.eclipse.sw360.datahandler.thrift.users.User user = new org.eclipse.sw360.datahandler.thrift.users.User();
+            if (userEmail != null) user.setEmail(userEmail);
+            return VendorConverter.fromThriftRequestStatus(vendorDatabaseHandler.updateVendor(thriftVendor, user));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    @Override
-    public RequestStatus mergeVendors(String mergeTargetId, String mergeSourceId, Vendor mergeSelection, User user) throws TException {
-        assertNotNull(mergeTargetId);
-        assertNotNull(mergeSourceId);
-        assertNotNull(mergeSelection);
-
-        return vendorDatabaseHandler.mergeVendors(mergeTargetId, mergeSourceId, mergeSelection, user);
+    public RequestStatus mergeVendors(String mergeTargetId, String mergeSourceId,
+                                       Vendor mergeSelection, String userEmail) {
+        try {
+            org.eclipse.sw360.datahandler.thrift.vendors.Vendor thriftSelection = VendorConverter.toThrift(mergeSelection);
+            org.eclipse.sw360.datahandler.thrift.users.User user = new org.eclipse.sw360.datahandler.thrift.users.User();
+            if (userEmail != null) user.setEmail(userEmail);
+            return VendorConverter.fromThriftRequestStatus(
+                    vendorDatabaseHandler.mergeVendors(mergeTargetId, mergeSourceId, thriftSelection, user));
+        } catch (Exception e) {
+            throw new RuntimeException("Merge failed: " + e.getMessage(), e);
+        }
     }
 
-    @Override
-    public ByteBuffer getVendorReportDataStream(List<Vendor> vendorList) throws TException {
-        return vendorDatabaseHandler.getVendorReportDataStream(vendorList);
+    public byte[] getVendorReportDataStream() {
+        try {
+            List<org.eclipse.sw360.datahandler.thrift.vendors.Vendor> thriftVendors = vendorDatabaseHandler.getAllVendors();
+            java.nio.ByteBuffer buffer = vendorDatabaseHandler.getVendorReportDataStream(thriftVendors);
+            byte[] data = new byte[buffer.remaining()];
+            buffer.get(data);
+            return data;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate vendor report: " + e.getMessage(), e);
+        }
     }
 }
