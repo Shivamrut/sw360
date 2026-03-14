@@ -53,7 +53,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class Sw360VendorService {
 
-    @Value("${sw360.vendors-service-url:http://localhost:8080}")
+    @Value("${sw360.vendors-service-url:http://localhost:8080/vendors}")
     private String vendorServiceUrl;
 
     private final RestTemplate vendorRestTemplate = new RestTemplate();
