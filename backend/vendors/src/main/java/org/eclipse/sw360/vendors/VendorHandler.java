@@ -18,6 +18,7 @@ import org.eclipse.sw360.services.common.AddDocumentRequestSummary;
 import org.eclipse.sw360.services.common.PaginationData;
 import org.eclipse.sw360.services.common.RequestStatus;
 import org.eclipse.sw360.services.vendor.Vendor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -33,6 +34,7 @@ public class VendorHandler {
     private final VendorDatabaseHandler vendorDatabaseHandler;
     private final VendorSearchHandler vendorSearchHandler;
 
+    @Autowired
     public VendorHandler(Cloudant client) throws IOException {
         DatabaseConnectorCloudant databaseConnector = new DatabaseConnectorCloudant(client, DatabaseSettings.COUCH_DB_DATABASE);
         vendorDatabaseHandler = new VendorDatabaseHandler(databaseConnector);
