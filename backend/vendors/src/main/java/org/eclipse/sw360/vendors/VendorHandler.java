@@ -13,6 +13,7 @@ import com.ibm.cloud.cloudant.v1.Cloudant;
 import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.cloudantclient.DatabaseConnectorCloudant;
 import org.eclipse.sw360.datahandler.common.DatabaseSettings;
+import org.eclipse.sw360.datahandler.db.UserRepository;
 import org.eclipse.sw360.datahandler.db.VendorSearchHandler;
 import org.eclipse.sw360.services.common.AddDocumentRequestSummary;
 import org.eclipse.sw360.services.common.PaginationData;
@@ -33,18 +34,23 @@ public class VendorHandler {
 
     private final VendorDatabaseHandler vendorDatabaseHandler;
     private final VendorSearchHandler vendorSearchHandler;
+    private final UserRepository userRepository;
 
     @Autowired
     public VendorHandler(Cloudant client) throws IOException {
         DatabaseConnectorCloudant databaseConnector = new DatabaseConnectorCloudant(client, DatabaseSettings.COUCH_DB_DATABASE);
         vendorDatabaseHandler = new VendorDatabaseHandler(databaseConnector);
         vendorSearchHandler = new VendorSearchHandler(client, DatabaseSettings.COUCH_DB_DATABASE);
+        DatabaseConnectorCloudant usersConnector = new DatabaseConnectorCloudant(client, DatabaseSettings.COUCH_DB_USERS);
+        userRepository = new UserRepository(usersConnector);
     }
 
     public VendorHandler(Cloudant client, String dbName) throws IOException {
         DatabaseConnectorCloudant databaseConnector = new DatabaseConnectorCloudant(client, dbName);
         vendorDatabaseHandler = new VendorDatabaseHandler(databaseConnector);
         vendorSearchHandler = new VendorSearchHandler(client, dbName != null ? dbName : DatabaseSettings.COUCH_DB_DATABASE);
+        DatabaseConnectorCloudant usersConnector = new DatabaseConnectorCloudant(client, DatabaseSettings.COUCH_DB_USERS);
+        userRepository = new UserRepository(usersConnector);
     }
 
     public Vendor getByID(String id) {
@@ -112,11 +118,21 @@ public class VendorHandler {
         return VendorConverter.fromThriftAddDocSummary(vendorDatabaseHandler.addVendor(thriftVendor));
     }
 
+    private org.eclipse.sw360.datahandler.thrift.users.User resolveUser(String userEmail) {
+        if (userEmail == null) {
+            throw new RuntimeException("User email is required for this operation");
+        }
+        org.eclipse.sw360.datahandler.thrift.users.User user = userRepository.getByEmail(userEmail);
+        if (user == null) {
+            throw new RuntimeException("User not found: " + userEmail);
+        }
+        return user;
+    }
+
     public RequestStatus deleteVendor(String id, String userEmail) {
         try {
-            org.eclipse.sw360.datahandler.thrift.users.User user = new org.eclipse.sw360.datahandler.thrift.users.User();
-            if (userEmail != null) user.setEmail(userEmail);
-            return VendorConverter.fromThriftRequestStatus(vendorDatabaseHandler.deleteVendor(id, user));
+            return VendorConverter.fromThriftRequestStatus(
+                    vendorDatabaseHandler.deleteVendor(id, resolveUser(userEmail)));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -125,9 +141,8 @@ public class VendorHandler {
     public RequestStatus updateVendor(Vendor vendor, String userEmail) {
         try {
             org.eclipse.sw360.datahandler.thrift.vendors.Vendor thriftVendor = VendorConverter.toThrift(vendor);
-            org.eclipse.sw360.datahandler.thrift.users.User user = new org.eclipse.sw360.datahandler.thrift.users.User();
-            if (userEmail != null) user.setEmail(userEmail);
-            return VendorConverter.fromThriftRequestStatus(vendorDatabaseHandler.updateVendor(thriftVendor, user));
+            return VendorConverter.fromThriftRequestStatus(
+                    vendorDatabaseHandler.updateVendor(thriftVendor, resolveUser(userEmail)));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -137,10 +152,9 @@ public class VendorHandler {
                                        Vendor mergeSelection, String userEmail) {
         try {
             org.eclipse.sw360.datahandler.thrift.vendors.Vendor thriftSelection = VendorConverter.toThrift(mergeSelection);
-            org.eclipse.sw360.datahandler.thrift.users.User user = new org.eclipse.sw360.datahandler.thrift.users.User();
-            if (userEmail != null) user.setEmail(userEmail);
             return VendorConverter.fromThriftRequestStatus(
-                    vendorDatabaseHandler.mergeVendors(mergeTargetId, mergeSourceId, thriftSelection, user));
+                    vendorDatabaseHandler.mergeVendors(mergeTargetId, mergeSourceId, thriftSelection,
+                            resolveUser(userEmail)));
         } catch (Exception e) {
             throw new RuntimeException("Merge failed: " + e.getMessage(), e);
         }
