@@ -16,20 +16,19 @@ import org.apache.thrift.TException;
 import org.eclipse.sw360.datahandler.thrift.ThriftClients;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.datahandler.thrift.users.UserService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * This user details provider is able to query the sw360 user thrift service to
- * check if a user identified by an email address or an external id exists.
+ * Queries the SW360 user service by email or external id.
+ * {@link ThriftClients} is created locally so startup does not depend on a {@code ThriftClients}
+ * bean wired next to {@link SecurityConfig} (avoids a circular dependency in the servlet container).
  */
 @Service
-@RequiredArgsConstructor
 public class Sw360UserDetailsProvider {
 
     private final Logger log = LogManager.getLogger(this.getClass());
 
-    private final ThriftClients thriftClients;
+    private final ThriftClients thriftClients = new ThriftClients();
 
     public User provideUserDetails(String email, String extId) {
         User result = null;

@@ -9,10 +9,10 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import lombok.RequiredArgsConstructor;
 import org.eclipse.sw360.rest.authserver.security.authproviders.Sw360UserAuthenticationProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -37,14 +37,10 @@ import java.util.UUID;
  */
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final Sw360UserAuthenticationProvider sw360UserAuthenticationProvider;
-
-    /** Defers creation of the auth-provider chain until after {@link SecurityConfig} is constructed. */
-    public SecurityConfig(@Lazy Sw360UserAuthenticationProvider sw360UserAuthenticationProvider) {
-        this.sw360UserAuthenticationProvider = sw360UserAuthenticationProvider;
-    }
 
     @Bean
     @Order(1)
