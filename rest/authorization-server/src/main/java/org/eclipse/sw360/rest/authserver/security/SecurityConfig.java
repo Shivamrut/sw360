@@ -9,7 +9,6 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
-import lombok.RequiredArgsConstructor;
 import org.eclipse.sw360.rest.authserver.security.authproviders.Sw360UserAuthenticationProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,14 +36,11 @@ import java.util.UUID;
  */
 @Configuration
 @EnableWebSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
-
-    private final Sw360UserAuthenticationProvider sw360UserAuthenticationProvider;
 
     @Bean
     @Order(1)
-    public SecurityFilterChain webFilterChainForOauth(HttpSecurity httpSecurity) throws Exception {
+    public SecurityFilterChain webFilterChainForOauth(HttpSecurity httpSecurity, Sw360UserAuthenticationProvider sw360UserAuthenticationProvider) throws Exception {
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 new OAuth2AuthorizationServerConfigurer();
         RequestMatcher endpointsMatcher = authorizationServerConfigurer.getEndpointsMatcher();
@@ -63,7 +59,7 @@ public class SecurityConfig {
 
     @Order(2)
     @Bean
-    public SecurityFilterChain appSecurity(HttpSecurity httpSecurity) throws Exception {
+    public SecurityFilterChain appSecurity(HttpSecurity httpSecurity, Sw360UserAuthenticationProvider sw360UserAuthenticationProvider) throws Exception {
         httpSecurity.authorizeHttpRequests(
                 authz -> authz
                 .requestMatchers("/client-management/**").hasAuthority("ADMIN")
