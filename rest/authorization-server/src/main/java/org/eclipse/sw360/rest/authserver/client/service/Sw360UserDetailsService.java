@@ -9,14 +9,13 @@ import org.apache.logging.log4j.Logger;
 import org.eclipse.sw360.datahandler.thrift.users.User;
 import org.eclipse.sw360.rest.authserver.security.Sw360GrantedAuthoritiesCalculator;
 import org.eclipse.sw360.rest.authserver.security.Sw360UserDetailsProvider;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class Sw360UserDetailsService implements UserDetailsService {
 
     private final Logger log = LogManager.getLogger(this.getClass());
@@ -24,6 +23,11 @@ public class Sw360UserDetailsService implements UserDetailsService {
     private final Sw360UserDetailsProvider userProvider;
 
     private final Sw360GrantedAuthoritiesCalculator authoritiesCalculator;
+
+    public Sw360UserDetailsService(@Lazy Sw360UserDetailsProvider userProvider, Sw360GrantedAuthoritiesCalculator authoritiesCalculator) {
+        this.userProvider = userProvider;
+        this.authoritiesCalculator = authoritiesCalculator;
+    }
 
     /**
      * @param username the username identifying the user whose data is required.
