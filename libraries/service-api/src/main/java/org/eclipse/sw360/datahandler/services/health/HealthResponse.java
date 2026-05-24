@@ -20,6 +20,7 @@ public class HealthResponse {
 
     @JsonProperty(required = true)
     private HealthStatus status;
+    
     @JsonProperty(required = true)
     private Map<String, String> details;
 
