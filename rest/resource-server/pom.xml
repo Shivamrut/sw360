@@ -18,7 +18,7 @@
     <parent>
         <artifactId>rest</artifactId>
         <groupId>org.eclipse.sw360</groupId>
-        <version>20.1.0-rc-1</version>
+        <version>20.1.0-rc-2</version>
     </parent>
 
     <artifactId>resource-server</artifactId>
@@ -146,6 +146,10 @@
         <dependency>
             <groupId>jakarta.xml.bind</groupId>
             <artifactId>jakarta.xml.bind-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
